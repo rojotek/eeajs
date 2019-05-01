@@ -1,7 +1,7 @@
 const axios = require("axios");
 const RLP = require("rlp");
+const _ = require("lodash");
 const { keccak256 } = require("./custom-ethjs-util");
-
 const PrivateTransaction = require("./privateTransaction");
 
 function EEAClient(web3, chainId) {
@@ -67,12 +67,23 @@ function EEAClient(web3, chainId) {
 
     const participants = options.privateFor;
     participants.push(options.privateFrom);
-    participants.sort();
-    const map = participants.map(x => {
-      return Buffer.from(x, "base64");
+    const uniqParticipants = _.uniq(participants);
+    const enhanced = uniqParticipants.map(x => {
+      const buffer = Buffer.from(x, "base64");
+      let result = 1;
+      buffer.forEach(value => {
+        result = (31 * result + value) % 0x7fffffff;
+      });
+      return { b64: x, buf: buffer, hash: result };
+    });
+    enhanced.sort((a, b) => {
+      return a.hash - b.hash;
+    });
+    const bufs = enhanced.map(x => {
+      return x.buf;
     });
 
-    const rlp = RLP.encode(map).toString("hex");
+    const rlp = RLP.encode(bufs).toString("hex");
 
     const privacyGroupId = keccak256(`0x${rlp}`).toString("hex");
 
